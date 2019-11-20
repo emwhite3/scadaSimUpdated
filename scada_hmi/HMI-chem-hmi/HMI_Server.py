@@ -289,6 +289,9 @@ class PLCThread(threading.Thread):
                     return
             except requests.ConnectionError as e:
                 time.sleep(30)
+                print historian_ip
+                print i["host_ip"]
+                print i["host_port"]
                 print e
 
     # Method: Historian Handler
