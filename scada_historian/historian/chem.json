@@ -1,8 +1,8 @@
 {
 	"Historian": {
-		"name_system": "Chemical Laboratory",
-		"name": "Chemical Laboratory",
-		"location": "Basement A",
+		"name_system": "SCADA LAB",
+		"name": "SCADA LAB",
+		"location": "Prospect 118",
 		"device_type": "Historian",
 		"host_ip": "10.0.100.10",
 		"port": 5020,
@@ -52,9 +52,9 @@
 						},
 						"sub_devices": {}
 					},
-					"Catalyst Temp": {
-						"name_system": "Catalyst Temp",
-						"name": "Catalyst Temp",
+					"Boiler Temp": {
+						"name_system": "Boiler Temp",
+						"name": "Boiler Temp",
 						"location": "B42",
 						"device_type": "Controller",
 						"actuators": {

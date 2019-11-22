@@ -28,7 +28,7 @@
 # SEI SCADA System Simulation (4S) V1.0 Data Server Web front end interface
 
 from flask import Flask, url_for, send_from_directory, request, render_template, jsonify
-from gevent import wsgi
+from gevent.pywsgi import WSGIServer
 from DB_Driver import DatabaseDriver
 import sys
 import getopt
@@ -158,7 +158,7 @@ def actuator_list():
 @app.route('/api/actuators/<actuator_id>', methods=['GET', 'POST'])
 def actuator_value(actuator_id=None):
     if request.method == 'POST':
-        print request.form
+        print (request.form)
         if 'uid' in request.form and 'newValue' in request.form and \
                 db_obj.set_actuator_value(actuator_id, float(request.form['newValue']), request.form['uid']):
             return "received %s update" % request.form['uid']
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         sys.exit()
     try:
         db_obj = DatabaseDriver(dbname, dbusername, dbpw)
-	db_obj.connect()
+        db_obj.connect()
         while not db_obj.database_populated():
             print("Database has not been initiated")
             time.sleep(10)
@@ -322,7 +322,8 @@ if __name__ == "__main__":
         with app.test_request_context():
             print("API located at '%s:%s%s'" % (ipaddr, port, url_for('api')))
         print("\n")
-        server = wsgi.WSGIServer((ipaddr, port), app)
+        server = WSGIServer((ipaddr, port), app)
         server.serve_forever()
     except Exception as e:
+        print("hello!")
         print(e)

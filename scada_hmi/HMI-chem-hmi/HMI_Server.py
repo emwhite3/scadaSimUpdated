@@ -283,15 +283,22 @@ class PLCThread(threading.Thread):
                 break
         while True:
             try:
+                print requests.get("http://%s/api" % historian_ip).status_code
                 if requests.get("http://%s/api" % historian_ip).status_code == 200:
                     print "HERE"
                     self.historian_handler(historian_ip)
                     return
+            except requests.exceptions.ConnectionError as e:
+                e.status_code = "Connection refused"
+                print 'done!'
+                return
             except requests.ConnectionError as e:
-                time.sleep(30)
                 print historian_ip
                 print i["host_ip"]
                 print i["host_port"]
+                print i["id"]
+                time.sleep(30)
+                
                 print e
 
     # Method: Historian Handler

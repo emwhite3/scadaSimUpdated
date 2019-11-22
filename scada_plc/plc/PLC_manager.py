@@ -27,11 +27,11 @@
 
 
 # SEI SCADA System Simulation (4S) V1.0 PLC Engine Manager
-import urllib.request
-import urllib.error
+
 import sys
 import json
 import getopt
+import requests
 import subprocess
 import time
 
@@ -44,7 +44,7 @@ import time
 #            Gateway: String of the gateway
 # Returns: Boolean True is success and False if failure
 def generate_network(name, interface, gateway):
-    print("Generating Network: %s" % name)
+    print "Generating Network: %s" % name
     s = gateway.split(".")
     try:
         subprocess.call("brctl addbr br-%s" % name, shell=True)
@@ -52,7 +52,7 @@ def generate_network(name, interface, gateway):
         subprocess.call("brctl addif br-%s %s" % (name, interface), shell=True)
         return True
     except subprocess.CalledProcessError as e:
-        print(e.output)
+        print e.output
         return False
 
 
@@ -126,10 +126,10 @@ if __name__ == "__main__":
         else:
             while True:
                 try:
-                    if urllib.request.urlopen("http://%s/api/" % host).status_code == 200:
-                        config = urllib.request.urlopen("http://%s/api/controller/config" % host).json()
+                    if requests.get("http://%s/api/" % host).status_code == 200:
+                        config = requests.get("http://%s/api/controller/config" % host).json()
                         break
-                except urllib.error.URLError as e:
+                except requests.ConnectionError as e:
                     print(e)
                     time.sleep(30)
         hmi_list = {}
@@ -148,10 +148,10 @@ if __name__ == "__main__":
         while True:
             continue
     except KeyboardInterrupt:
-        print("Caught Interrupt, spinning down containers and exiting")
+        print "Caught Interrupt, spinning down containers and exiting"
         exit()
     except Exception as e:
-        print(e.message)
+        print e.message
         sys.exit()
     except IOError:
         print("Error opening '%s': File Not Found" % config)
