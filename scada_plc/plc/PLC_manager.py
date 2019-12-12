@@ -95,7 +95,7 @@ def usage(full=False):
 if __name__ == "__main__":
     # Default config file
     config = None
-    host = None
+    host = "127.0.0.1:5000"
     keep = True
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hkvf:n:", ["keep", "help", "version", "file=", "hostname="])
@@ -126,12 +126,15 @@ if __name__ == "__main__":
         else:
             while True:
                 try:
+                    print("IN!")
                     if requests.get("http://%s/api/" % host).status_code == 200:
                         config = requests.get("http://%s/api/controller/config" % host).json()
                         break
                 except requests.ConnectionError as e:
-                    print(e)
-                    time.sleep(30)
+                    print(host)
+                    print(config)
+                    break
+        print("out!")
         hmi_list = {}
         for i in config["hmi"]:
             hmi_list[i["id"][:10]] = {"ip": i["host_ip"], "port": i["host_port"]}
