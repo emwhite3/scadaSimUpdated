@@ -319,6 +319,7 @@ if __name__ == "__main__":
             break
 
         print("Serving application on '%s:%s'" % (ipaddr, port))
+        #print("%s", url_for('api'))
         with app.test_request_context():
             print("API located at '%s:%s%s'" % (ipaddr, port, url_for('api')))
         print("\n")

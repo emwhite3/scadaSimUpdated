@@ -41,6 +41,10 @@ import requests
 import json
 import os
 uid=None
+
+#Used for simulated data flow
+from random import seed
+from random import randint
 # Data Store for PLC Devices hr is used for Reg Read and Reg Write and is the only register interaction
 store = ModbusSlaveContext(
     di = ModbusSequentialDataBlock(0, [17]*100),
@@ -274,11 +278,12 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         self.hmi_initial_setup()
-        historian_ip = None
+        historian_ip = "127.0.0.1:5000"
         root = self.db_obj.get_device_list()
         for i in root:
             if "HISTORIAN" in i["id"]:
-                historian_ip = "%s:%s" % (i["host_ip"], i["host_port"])
+                historian_ip = "127.0.0.1:5000" 
+                #% (i["host_ip"], i["host_port"])
                 print historian_ip
                 break
         while True:
@@ -288,10 +293,10 @@ class PLCThread(threading.Thread):
                     print "HERE"
                     self.historian_handler(historian_ip)
                     return
-            except requests.exceptions.ConnectionError as e:
-                e.status_code = "Connection refused"
-                print 'done!'
-                return
+            #except requests.exceptions.ConnectionError as e:
+             #   e.status_code = "Connection refused"
+              #  print 'done!'
+               # return
             except requests.ConnectionError as e:
                 print historian_ip
                 print i["host_ip"]
@@ -328,7 +333,7 @@ class PLCThread(threading.Thread):
         plc_list = self.db_obj.get_all_plc_list()
         for i in plc_list:
             store.setValues(3, i['device_num'], [i['initial_value']])
-
+        
     # Method: Send Actuator
     # Description: Sends Historian HTTP POST of the current value of the PLC actuator device defined by act
     # Arguments: ip: http ip string of the historian
@@ -337,8 +342,11 @@ class PLCThread(threading.Thread):
     # Returns: void
     @staticmethod
     def send_act(ip, act):
-        payload = {'uid' : uid, 'newValue': store.getValues(3, act["device_num"])[0]}
+        payload = {'uid' : uid, 'newValue': update_sens_num(store.getValues(3, act["device_num"])[0])}
         try:
+            print("\n\nPAYLOAD:" )
+            print(payload)
+            print("\n\n\n")
             requests.post("http://%s/api/actuators/%s" % (ip, act["id"]), data=payload)
         except requests.ConnectionError:
             return
@@ -351,8 +359,29 @@ class PLCThread(threading.Thread):
     # Returns: void
     @staticmethod
     def send_sens(ip, sens):
-        payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
+        print("\n\n\n\n")
+        print(store.getValues(3, sens["device_num"])[0])
+        print("\n\n\n\n\n")
+        payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
+
+# Method: Update Sensor Number
+# Description: Gets new sensor number by adding numbers from a text value to the base value
+# Arguments: base: current plc device number
+# Returns: int: new sensor number
+def update_sens_num(base):
+    large = open("simulatedtext/large.txt", "r+")
+    big = open("simulatedtext/big.txt", "r+")
+    plain = open("simulatedtext/plain.txt", "r+")
+    if base >= 1000:
+        numbers = large.readlines()
+        return int(numbers[randint(0,len(numbers)-1)]) + base
+    elif base >= 400:
+        numbers = big.readlines()
+        return int(numbers[randint(0,len(numbers)-1)]) + base
+    else:
+        numbers = plain.readlines()
+        return int(numbers[randint(0,len(numbers)-1)]) + base
 
 # Method: Usage
 # Description: displays CLI usage
@@ -382,6 +411,8 @@ if __name__ == "__main__":
     dbname = None
     dbusername = None
     dbpw = None
+    #set seed for random number gen
+    seed(12)
 
     # Process options
     try:
