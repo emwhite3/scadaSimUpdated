@@ -4,7 +4,7 @@
 		"name": "SCADA LAB",
 		"location": "Prospect 118",
 		"device_type": "Historian",
-		"host_ip": "10.0.100.10",
+		"host_ip": "127.0.0.1",
 		"port": 5020,
 		"actuators": {
 			"Status": {
@@ -20,8 +20,8 @@
 				"location": "Basement A room B42",
 				"device_type": "Human-Machine Interface",
 				"host_ip": "10.0.100.12",
-				"hmi_ip": "172.16.61.1",
-				"interface": "ens33",
+				"hmi_ip": "172.18.61.1",
+				"interface": "enp0s3",
 				"actuators": {
 					"Status": {
 						"type": "enabled",
