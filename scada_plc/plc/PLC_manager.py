@@ -47,8 +47,14 @@ def generate_network(name, interface, gateway):
     print "Generating Network: %s" % name
     s = gateway.split(".")
     try:
-        subprocess.call("brctl addbr br-%s" % name, shell=True)
+        #creates a bridge
+        subprocess.call("sudo brctl addbr br-%s" % name, shell=True)
+        #-o \"com.docker.network.bridge.name\"=\"br-%s\" sets bridge name to provided string (use this for further reference to bridge)
+        #--subnet %s establishes subnet using CIDR format
+        #--gateway %s %s IPv4 or IPv6 gateway for master subnet
+        #print("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], s[1], s[2]), "%s.%s.%s.254" % (s[0], s[1], s[2]), name))
         subprocess.call("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], s[1], s[2]), "%s.%s.%s.254" % (s[0], s[1], s[2]), name), shell=True)
+        #adds given interface to a bridge (allows coms over bridge to plc devices..?)
         subprocess.call("brctl addif br-%s %s" % (name, interface), shell=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -66,6 +72,8 @@ def spawn_containers(config, network):
     print("%s: spawning on Network %s" % (config["id"], network))
     if config["network"] == "localhost":
         return
+    #print("docker run -t --name %s --net %s --ip %s -d plc -D %s -I %s -P %s" %
+     #               (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], network["port"]))
     subprocess.call("docker run -t --name %s --net %s --ip %s -d plc -D %s -I %s -P %s" %
                     (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], network["port"]), shell=True)
 
@@ -121,27 +129,27 @@ if __name__ == "__main__":
             assert False, "unhandled option"
 
     try:
+        #reads given config file from terminal instruction
         if config:
             config = json.loads(open(config, 'r').read())
         else:
             while True:
                 try:
-                    print("IN!")
+                    #checks if host (historian) is live
                     if requests.get("http://%s/api/" % host).status_code == 200:
+                        #sets config to hosts defined json (whatever the init used for setup)
                         config = requests.get("http://%s/api/controller/config" % host).json()
                         break
                 except requests.ConnectionError as e:
-                    print(host)
-                    print(config)
                     break
-        print("out!")
         hmi_list = {}
+        print(config)
         for i in config["hmi"]:
             hmi_list[i["id"][:10]] = {"ip": i["host_ip"], "port": i["host_port"]}
-            if i["network"] == "localhost" or i["network"] == "127.0.0.1":
+            if i["network"] == "localhost" or i["id"] == "127.0.0.1":
                 continue
             else:
-                if not generate_network(i["id"][:10], i["interface"], i["hmi_ip"]):
+                if not generate_network(i["id"][:10], "enp0s3", i["hmi_ip"]):
                     raise Exception("Please check your configuration file the "
                                 "following network was unable to generate: %s" % i)
         for i in config["con"]:
