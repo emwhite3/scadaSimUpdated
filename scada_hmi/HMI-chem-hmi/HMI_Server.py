@@ -40,6 +40,7 @@ import getopt
 import requests
 import json
 import os
+import socket
 uid=None
 
 #Used for simulated data flow
@@ -94,7 +95,8 @@ class PLCThread(threading.Thread):
             self.plc_server()
         elif self.system_type == 1:
             print "Sensor"
-            self.sensor_handler()
+            hmi_client = Client('192.168.4.10', 5004)
+            self.sensor_handler(hmi_client)
         elif self.system_type == 2:
             print "Actuator"
             self.actuator_handler()
@@ -251,16 +253,24 @@ class PLCThread(threading.Thread):
     # Description: Handles sensor register values and updates the local database
     # Arguments: self: initialized PLC Thread Object
     # Returns: void
-    def sensor_handler(self):
+    def sensor_handler(self, hmi_client):
         time.sleep(10)
         if not self.db_obj or not self.db_obj.connect():
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         sensor_list = self.db_obj.get_all_sensors_id()
+        print(sensor_list)
         while True:
             time.sleep(3)
             for i in sensor_list:
-                value = store.getValues(3, i["device_num"])[0]
+                #initiate client connection to pi
+                #request the sensor value by providing seensor id
+                #recieve sensor value back from the pi
+                #set value equal to that of the pi
+                #make method call here
+
+                value = hmi_client.get_val()
+                #value = store.getValues(3, i["device_num"])[0]
                 if len(hex(int(value))) == 6 and hex(int(value))[:3] == "0xf":
                     if hex(int(value)) == "0xffff":
                         self.db_obj.set_sensor_value(i["id"], 0, '7777')
@@ -278,11 +288,11 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         self.hmi_initial_setup()
-        historian_ip = "127.0.0.1:5000"
+        historian_ip = "192.168.4.11:5000"
         root = self.db_obj.get_device_list()
         for i in root:
             if "HISTORIAN" in i["id"]:
-                historian_ip = "127.0.0.1:5000" 
+                historian_ip = "192.168.4.11:5000" 
                 #% (i["host_ip"], i["host_port"])
                 print historian_ip
                 break
@@ -290,18 +300,15 @@ class PLCThread(threading.Thread):
             try:
                 print requests.get("http://%s/api" % historian_ip).status_code
                 if requests.get("http://%s/api" % historian_ip).status_code == 200:
-                    print "HERE"
+                    print "Connected to Historian!"
                     self.historian_handler(historian_ip)
                     return
-            #except requests.exceptions.ConnectionError as e:
-             #   e.status_code = "Connection refused"
-              #  print 'done!'
-               # return
             except requests.ConnectionError as e:
-                print historian_ip
-                print i["host_ip"]
-                print i["host_port"]
-                print i["id"]
+                print("Could not connect to Historian!")
+                #print historian_ip
+                #print i["host_ip"]
+                #print i["host_port"]
+                #print i["id"]
                 time.sleep(30)
                 
                 print e
@@ -343,10 +350,8 @@ class PLCThread(threading.Thread):
     @staticmethod
     def send_act(ip, act):
         payload = {'uid' : uid, 'newValue': update_sens_num(store.getValues(3, act["device_num"])[0])}
+        #payload = {'uid' : uid, 'newValue': store.getValues(3, act["device_num"])[0]}
         try:
-            print("\n\nPAYLOAD:" )
-            print(payload)
-            print("\n\n\n")
             requests.post("http://%s/api/actuators/%s" % (ip, act["id"]), data=payload)
         except requests.ConnectionError:
             return
@@ -359,10 +364,8 @@ class PLCThread(threading.Thread):
     # Returns: void
     @staticmethod
     def send_sens(ip, sens):
-        print("\n\n\n\n")
-        print(store.getValues(3, sens["device_num"])[0])
-        print("\n\n\n\n\n")
         payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
+        #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
 # Method: Update Sensor Number
@@ -383,6 +386,28 @@ def update_sens_num(base):
         numbers = plain.readlines()
         return int(numbers[randint(0,len(numbers)-1)]) + base
 
+class Client():
+
+    def __init__(self, host_ip, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.host_address = (host_ip, port)
+        self.connection()
+    
+    def get_val(self, sens_id):
+        self.sock.sendall(sens_id)
+        return int(self.sock.recv(1024))
+
+    def connection(self):
+        while True:
+            try:
+                self.sock.connect(self.host_address)
+                print("Connected to PLC Host!")
+                return
+            except:
+                print(self.host_address)
+                print("UHHH YES??")
+    
+    
 # Method: Usage
 # Description: displays CLI usage
 # Arguments: None
@@ -406,8 +431,8 @@ def usage(full=False):
 # Returns: Void
 if __name__ == "__main__":
     # Default Values
-    ipaddr = '127.0.0.1'
-    port = 5000
+    ipaddr = '192.168.4.13'
+    port = 5001
     dbname = None
     dbusername = None
     dbpw = None
@@ -465,5 +490,6 @@ if __name__ == "__main__":
         sensor.start()
         actuators.start()
     except KeyboardInterrupt:
-        print "HERE"
+        print "Turning off HMI Device"
         os._exit(1) 
+
