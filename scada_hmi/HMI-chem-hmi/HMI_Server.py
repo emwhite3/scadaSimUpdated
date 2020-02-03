@@ -64,6 +64,10 @@ identity.ProductName = 'PLC Sensor Server'
 identity.ModelName   = 'Sensor Server 5000'
 identity.MajorMinorRevision = '3.a1'
 
+# Global reference to the hmi client object
+# This will allow both actuator and sensor methods to
+# Retrieve sensor values when neccesary
+hmi_client = Client('192.168.4.10', 5004)
 
 # Class: PLC Server Thread
 # Description: HMI Machines maintain connection between the PLC device and the Historian. The PLC Thread maintains three
@@ -95,8 +99,7 @@ class PLCThread(threading.Thread):
             self.plc_server()
         elif self.system_type == 1:
             print "Sensor"
-            hmi_client = Client('192.168.4.10', 5004)
-            self.sensor_handler(hmi_client)
+            self.sensor_handler()
         elif self.system_type == 2:
             print "Actuator"
             self.actuator_handler()
@@ -248,6 +251,8 @@ class PLCThread(threading.Thread):
     #            Count: The counter used to identify the current command ID
     # Returns: void
     def kill_walk(self, device_list, count):
+        #send request to get all sensor values
+        #send kill request
         for i in device_list:
             if "sen" in i['id']:
                 store.setValues(3, i["device_num"], [int("0xffff", 0)])
@@ -259,18 +264,18 @@ class PLCThread(threading.Thread):
     # Description: Handles sensor register values and updates the local database
     # Arguments: self: initialized PLC Thread Object
     # Returns: void
-    def sensor_handler(self, hmi_client):
+    def sensor_handler(self):
         time.sleep(10)
         if not self.db_obj or not self.db_obj.connect():
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         sensor_list = self.db_obj.get_all_sensors_id()
-        print(sensor_list)
+        #print(sensor_list)
         while True:
             time.sleep(3)
             for i in sensor_list:
                 #initiate client connection to pi
-                #request the sensor value by providing seensor id
+                #request the sensor value by providing sensor id
                 #recieve sensor value back from the pi
                 #set value equal to that of the pi
                 #make method call here
@@ -300,7 +305,6 @@ class PLCThread(threading.Thread):
             if "HISTORIAN" in i["id"]:
                 historian_ip = "192.168.4.11:5000" 
                 #% (i["host_ip"], i["host_port"])
-                print historian_ip
                 break
         while True:
             try:
