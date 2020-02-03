@@ -167,6 +167,8 @@ class PLCThread(threading.Thread):
                 self.db_obj.set_actuator_value(i['id'], 0, count)
                 store.setValues(3, i["device_num"], [0])
 
+
+
     # Method: On Walk
     # Description: Walks the Slave device list and and propagates on command.
     # Arguments: self: initialized PLC Thread Object
@@ -234,6 +236,10 @@ class PLCThread(threading.Thread):
             store.setValues(3, device["device_num"], [int("0xf600", 0) + (count % 256)])
         elif reg_value == 3:
             store.setValues(3, device["device_num"], [int("0xf500", 0) + (count % 256)])
+
+
+
+    #CAN SHUTDOWN PI: use terminal command
 
     # Method: Kill Walk
     # Description: Communicates to dependent devices the kill command to disconnect and shut down the device
@@ -305,13 +311,8 @@ class PLCThread(threading.Thread):
                     return
             except requests.ConnectionError as e:
                 print("Could not connect to Historian!")
-                #print historian_ip
-                #print i["host_ip"]
-                #print i["host_port"]
-                #print i["id"]
-                time.sleep(30)
-                
                 print e
+                time.sleep(30)
 
     # Method: Historian Handler
     # Description: Update Historian with current PLC device state, this polling happens every 30 seconds
@@ -386,6 +387,10 @@ def update_sens_num(base):
         numbers = plain.readlines()
         return int(numbers[randint(0,len(numbers)-1)]) + base
 
+# Class: Client Network Instance
+# Description: This is responsible for connecting the HMI to the PLC host so that
+# Communications is possibble. This will request sensor data as well as send actuator
+# commands the the PLC Host
 class Client():
 
     def __init__(self, host_ip, port):
@@ -393,7 +398,7 @@ class Client():
         self.host_address = (host_ip, port)
         self.connection()
     
-    def get_val(self, sens_id):
+    def get_val(self, sens_id): 
         self.sock.sendall(sens_id)
         return int(self.sock.recv(1024))
 
@@ -404,8 +409,8 @@ class Client():
                 print("Connected to PLC Host!")
                 return
             except:
+                print("Could not connect to host: ")
                 print(self.host_address)
-                print("UHHH YES??")
     
     
 # Method: Usage
@@ -431,8 +436,8 @@ def usage(full=False):
 # Returns: Void
 if __name__ == "__main__":
     # Default Values
-    ipaddr = '192.168.4.13'
-    port = 5001
+    ipaddr = '0.0.0.0'
+    port = 0
     dbname = None
     dbusername = None
     dbpw = None
