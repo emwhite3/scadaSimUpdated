@@ -49,13 +49,17 @@ def generate_network(name, interface, gateway):
     try:
         #creates a bridge
         subprocess.call("sudo brctl addbr br-%s" % name, shell=True)
+        print("Finished adding bridge")
         #-o \"com.docker.network.bridge.name\"=\"br-%s\" sets bridge name to provided string (use this for further reference to bridge)
         #--subnet %s establishes subnet using CIDR format
         #--gateway %s %s IPv4 or IPv6 gateway for master subnet
-        #print("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], s[1], s[2]), "%s.%s.%s.254" % (s[0], s[1], s[2]), name))
-        subprocess.call("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], s[1], s[2]), "%s.%s.%s.254" % (s[0], s[1], s[2]), name), shell=True)
+        print("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], "21", s[2]), "%s.%s.%s.254" % (s[0], "21", s[2]), name))
+        subprocess.call("docker network create -o \"com.docker.network.bridge.name\"=\"br-%s\" --subnet %s --gateway %s %s" % (name, "%s.%s.%s.0/24" % (s[0], "21", s[2]), "%s.%s.%s.254" % (s[0], "21", s[2]), name), shell=True)
+        print("Created docker network")
         #adds given interface to a bridge (allows coms over bridge to plc devices..?)
+        #subprocess.call("ifconfig enp0s3 up")
         subprocess.call("brctl addif br-%s %s" % (name, interface), shell=True)
+        print("Added default ethernet interface to bridge")
         return True
     except subprocess.CalledProcessError as e:
         print e.output
@@ -72,10 +76,18 @@ def spawn_containers(config, network):
     print("%s: spawning on Network %s" % (config["id"], network))
     if config["network"] == "localhost":
         return
-    #print("docker run -t --name %s --net %s --ip %s -d plc -D %s -I %s -P %s" %
-     #               (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], network["port"]))
-    subprocess.call("docker run -t --name %s --net %s --ip %s -d plc -D %s -I %s -P %s" %
-                    (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], network["port"]), shell=True)
+    #docker run - creates a new docker container
+    #-t         - attaches the stdin and stdout to the container
+    #--name     - assigns given name to the name of the container
+    #--net      - connects the given container to a network (in this case it is an ip address)
+    #--ip       - specifies the ip address of the container to the one given (not a random one assigned by docker)
+    #-d         - specifies to run the given image (in a container) in the background and print its id (??*)
+    #-D         - 
+
+    print("docker run -t --name %s --net %s --ip %s -d centos -D %s -I %s -p %s" %
+                    (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], network["port"]))
+    subprocess.call("docker run -t --name %s --net %s --ip %s -d centos -D %s -I %s -p %s" %
+                    (config["id"], config["network"][:10], config["host_ip"], config["id"], network["ip"], 5020), shell=True)
 
 
 # Method: Usage

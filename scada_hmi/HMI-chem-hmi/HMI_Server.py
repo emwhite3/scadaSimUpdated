@@ -28,10 +28,10 @@
 
 # SEI SCADA System Simulation (4S) V1.0 HMI Server used on HMI machines
 
-from pymodbus.server.sync import StartTcpServer
-from pymodbus.device import ModbusDeviceIdentification
-from pymodbus.datastore import ModbusSequentialDataBlock
-from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
+from pymodbus3.server.sync import StartTcpServer
+from pymodbus3.device import ModbusDeviceIdentification
+from pymodbus3.datastore import ModbusSequentialDataBlock
+from pymodbus3.datastore import ModbusSlaveContext, ModbusServerContext
 from DB_Driver import DatabaseDriver
 import time
 import sys
@@ -40,6 +40,14 @@ import getopt
 import requests
 import json
 import os
+import socket
+# Websocket imports temp
+import websocket
+from websocket import create_connection
+try:
+  import thread
+except ImportError:
+    import _thread as thread
 uid=None
 
 #Used for simulated data flow
@@ -63,6 +71,73 @@ identity.ProductName = 'PLC Sensor Server'
 identity.ModelName   = 'Sensor Server 5000'
 identity.MajorMinorRevision = '3.a1'
 
+# Class: Client Network Instance
+# Description: This is responsible for connecting the HMI to the PLC host so that
+# Communications is possibble. This will request sensor data as well as send actuator
+# commands the the PLC Host
+class Client():
+
+    def __init__(self, host_ip, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.host_address = (host_ip, port)
+        self.connection()
+    
+    def get_val(self, sens_id): 
+        self.sock.sendall(sens_id)
+        return int(self.sock.recv(1024))
+
+    def connection(self):
+        while True:
+            try:
+                self.sock.connect(self.host_address)
+                print("Connected to PLC Host!")
+                return
+            except:
+                print("Could not connect to host: ")
+                print(self.host_address)
+
+# Global reference to the hmi client object
+# This will allow both actuator and sensor methods to
+# Retrieve sensor values when neccesary
+hmi_client = Client('192.168.4.10', 5004)
+
+
+# Websocket client
+class PLCWS:
+  call = None
+  response = None
+  
+  # Starts webbsocket client connection with resp and pub on node red
+  def __init__(self):
+    self.response = create_connection("ws://192.168.0.17:1880/ws/publishMessage")\
+
+    websocket.enableTrace(True)
+    call = websocket.WebSocketApp("ws://192.168.0.17:1880/ws/receiveMessage",
+                              on_message = on_message,
+                              on_error = on_error,
+                              on_close = on_close)
+    call.on_open = on_open
+    call.run_forever()
+
+  def on_message(self, message):
+    print(message)
+
+  def on_error(self, error):
+    print(error)
+
+  def on_close(self):
+    print("closed connection to websocket...")
+
+  def on_open(self):
+    def run(*args):
+      for i in range(3):
+        time.sleep(1)
+        self.call.send("Hello!")
+      time.sleep(1)
+      self.call.close()
+      print("thread terminating...")
+    thread.start_new_thread(run, ())
+ws_client = PLCWS()
 
 # Class: PLC Server Thread
 # Description: HMI Machines maintain connection between the PLC device and the Historian. The PLC Thread maintains three
@@ -90,16 +165,16 @@ class PLCThread(threading.Thread):
     # Returns: void
     def run(self):
         if self.system_type == 0:
-            print "Server"
+            print("Server")
             self.plc_server()
         elif self.system_type == 1:
-            print "Sensor"
+            print("Sensor")
             self.sensor_handler()
         elif self.system_type == 2:
-            print "Actuator"
-            self.actuator_handler()
+            print("Actuator")
+            #self.actuator_handler()
         elif self.system_type == 3:
-            print "Historian"
+            print("Historian")
             self.db_obj.connect()
             self.historian_connection_check()
         else:
@@ -164,6 +239,8 @@ class PLCThread(threading.Thread):
             if "act" in i['id']:
                 self.db_obj.set_actuator_value(i['id'], 0, count)
                 store.setValues(3, i["device_num"], [0])
+
+
 
     # Method: On Walk
     # Description: Walks the Slave device list and and propagates on command.
@@ -233,6 +310,10 @@ class PLCThread(threading.Thread):
         elif reg_value == 3:
             store.setValues(3, device["device_num"], [int("0xf500", 0) + (count % 256)])
 
+
+
+    #CAN SHUTDOWN PI: use terminal command
+
     # Method: Kill Walk
     # Description: Communicates to dependent devices the kill command to disconnect and shut down the device
     # Arguments: self: initialized PLC Thread Object
@@ -240,6 +321,8 @@ class PLCThread(threading.Thread):
     #            Count: The counter used to identify the current command ID
     # Returns: void
     def kill_walk(self, device_list, count):
+        #send request to get all sensor values
+        #send kill request
         for i in device_list:
             if "sen" in i['id']:
                 store.setValues(3, i["device_num"], [int("0xffff", 0)])
@@ -257,9 +340,17 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         sensor_list = self.db_obj.get_all_sensors_id()
+        #print(sensor_list)
         while True:
             time.sleep(3)
             for i in sensor_list:
+                #initiate client connection to pi
+                #request the sensor value by providing sensor id
+                #recieve sensor value back from the pi
+                #set value equal to that of the pi
+                #make method call here
+
+                #value = hmi_client.get_val('yeeee')
                 value = store.getValues(3, i["device_num"])[0]
                 if len(hex(int(value))) == 6 and hex(int(value))[:3] == "0xf":
                     if hex(int(value)) == "0xffff":
@@ -273,38 +364,31 @@ class PLCThread(threading.Thread):
     # occurs this thread will continue with the historian handler
     # Arguments: self: initialized PLC Thread Object
     # Returns: void
+
+    #Need to scrape from the json file for the historian ip address
     def historian_connection_check(self):
         if not self.db_obj or not self.db_obj.connect():
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         self.hmi_initial_setup()
-        historian_ip = "127.0.0.1:5000"
+        historian_ip = "192.168.0.30:5000"
         root = self.db_obj.get_device_list()
         for i in root:
             if "HISTORIAN" in i["id"]:
-                historian_ip = "127.0.0.1:5000" 
+                historian_ip = "192.168.0.30:5000" 
                 #% (i["host_ip"], i["host_port"])
-                print historian_ip
                 break
         while True:
             try:
-                print requests.get("http://%s/api" % historian_ip).status_code
+                #print requests.get("http://%s/api" % historian_ip).status_code
                 if requests.get("http://%s/api" % historian_ip).status_code == 200:
-                    print "HERE"
+                    print("Connected to Historian!")
                     self.historian_handler(historian_ip)
                     return
-            #except requests.exceptions.ConnectionError as e:
-             #   e.status_code = "Connection refused"
-              #  print 'done!'
-               # return
             except requests.ConnectionError as e:
-                print historian_ip
-                print i["host_ip"]
-                print i["host_port"]
-                print i["id"]
+                print("Could not connect to Historian!")
+                print(e)
                 time.sleep(30)
-                
-                print e
 
     # Method: Historian Handler
     # Description: Update Historian with current PLC device state, this polling happens every 30 seconds
@@ -315,12 +399,12 @@ class PLCThread(threading.Thread):
         node_list = self.db_obj.get_all_plc_list()
         while True:
             time.sleep(30)
-            print "WTF"
+            #print "WTF"
             for i in node_list:
-                print "IP %s A: %s" % (ip, i)
+                print("IP %s A: %s" % (ip, i))
                 if i["plc_type"] == "actuator":
-                    print "IP %s A: %s" % (ip, i)
-                    print "IP %s A: %s" % (ip, i)
+                    print("IP %s A: %s" % (ip, i))
+                    print("IP %s A: %s" % (ip, i))
                     self.send_act(ip, i)
                 elif i["plc_type"] == "sensor":
                     self.send_sens(ip, i)
@@ -343,10 +427,8 @@ class PLCThread(threading.Thread):
     @staticmethod
     def send_act(ip, act):
         payload = {'uid' : uid, 'newValue': update_sens_num(store.getValues(3, act["device_num"])[0])}
+        #payload = {'uid' : uid, 'newValue': store.getValues(3, act["device_num"])[0]}
         try:
-            print("\n\nPAYLOAD:" )
-            print(payload)
-            print("\n\n\n")
             requests.post("http://%s/api/actuators/%s" % (ip, act["id"]), data=payload)
         except requests.ConnectionError:
             return
@@ -359,10 +441,9 @@ class PLCThread(threading.Thread):
     # Returns: void
     @staticmethod
     def send_sens(ip, sens):
-        print("\n\n\n\n")
-        print(store.getValues(3, sens["device_num"])[0])
-        print("\n\n\n\n\n")
         payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
+        #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
+
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
 # Method: Update Sensor Number
@@ -374,15 +455,18 @@ def update_sens_num(base):
     big = open("simulatedtext/big.txt", "r+")
     plain = open("simulatedtext/plain.txt", "r+")
     if base >= 1000:
-        numbers = large.readlines()
+        numbers = large.readlines() 
         return int(numbers[randint(0,len(numbers)-1)]) + base
-    elif base >= 400:
+    elif base >= 400:  
         numbers = big.readlines()
         return int(numbers[randint(0,len(numbers)-1)]) + base
     else:
         numbers = plain.readlines()
         return int(numbers[randint(0,len(numbers)-1)]) + base
 
+
+    
+    
 # Method: Usage
 # Description: displays CLI usage
 # Arguments: None
@@ -406,8 +490,8 @@ def usage(full=False):
 # Returns: Void
 if __name__ == "__main__":
     # Default Values
-    ipaddr = '127.0.0.1'
-    port = 5000
+    ipaddr = '0.0.0.0'
+    port = 0
     dbname = None
     dbusername = None
     dbpw = None
@@ -448,10 +532,10 @@ if __name__ == "__main__":
     test = DatabaseDriver(dbname, dbusername, dbpw)
     test.connect()
     while not test.database_populated():
-        print "Database has yet to be initiated"
+        print("Database has yet to be initiated")
         time.sleep(10)
     uid = test.get_root_id()
-    print type(uid)
+    #print type(uid)
     test.disconnect()
     
 
@@ -465,5 +549,6 @@ if __name__ == "__main__":
         sensor.start()
         actuators.start()
     except KeyboardInterrupt:
-        print "HERE"
+        print("Turning off HMI Device")
         os._exit(1) 
+

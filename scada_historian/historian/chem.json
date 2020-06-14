@@ -1,6 +1,6 @@
 {
 	"Historian": {
-		"name_system": "SCADA LAB",
+		"name_system": "SCADA LAB SYSTEM",
 		"name": "SCADA LAB",
 		"location": "Prospect 118",
 		"device_type": "Historian",
@@ -15,8 +15,8 @@
 		"sensors": {},
 		"sub_devices": {
 			"Haber Process": {
-				"name_system": "Haber Process",
-				"name": "Haber Process",
+				"name_system": "Haber Process (HMI DEVICE)",
+				"name": "Haber Process (HMI DEVICE)",
 				"location": "Basement A room B42",
 				"device_type": "Human-Machine Interface",
 				"host_ip": "10.0.100.12",
