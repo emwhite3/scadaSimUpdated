@@ -4,8 +4,8 @@
 		"name": "Chemical Laboratory",
 		"location": "Basement A",
 		"device_type": "Historian",
-		"host_ip": "10.0.100.10",
-		"port": 5020,
+		"host_ip": "192.168.4.11",
+		"port": 5000,
 		"actuators": {
 			"Status": {
 				"type": "enabled",
@@ -19,9 +19,9 @@
 				"name": "Haber Process",
 				"location": "Basement A room B42",
 				"device_type": "Human-Machine Interface",
-				"host_ip": "10.0.100.12",
-				"hmi_ip": "172.16.61.1",
-				"interface": "ens33",
+				"host_ip": "192.158.4.13",
+				"hmi_ip": "0.0.0.0",
+				"interface": "enp0s3",
 				"actuators": {
 					"Status": {
 						"type": "enabled",

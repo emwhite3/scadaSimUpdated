@@ -252,8 +252,8 @@ def usage():
 # Returns: Void
 if __name__ == "__main__":
     # Default Values
-    ipaddr = '127.0.0.1'
-    port = 5000
+    ipaddr = '0.0.0.0'
+    port = 0
     verbose = False
     dbname = None
     dbusername = None

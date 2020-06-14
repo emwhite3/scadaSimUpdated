@@ -48,6 +48,7 @@ try:
   import thread
 except ImportError:
     import _thread as thread
+
 uid=None
 
 #Used for simulated data flow
@@ -100,7 +101,6 @@ class Client():
 # This will allow both actuator and sensor methods to
 # Retrieve sensor values when neccesary
 hmi_client = Client('192.168.4.10', 5004)
-
 
 # Websocket client
 class PLCWS:
@@ -443,7 +443,10 @@ class PLCThread(threading.Thread):
     def send_sens(ip, sens):
         payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
         #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
+<<<<<<< HEAD
 
+=======
+>>>>>>> c9e0707bdf811f15b73ae16030aab9329ba792b1
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
 # Method: Update Sensor Number
@@ -464,7 +467,30 @@ def update_sens_num(base):
         numbers = plain.readlines()
         return int(numbers[randint(0,len(numbers)-1)]) + base
 
+# Class: Client Network Instance
+# Description: This is responsible for connecting the HMI to the PLC host so that
+# Communications is possibble. This will request sensor data as well as send actuator
+# commands the the PLC Host
+class Client():
 
+    def __init__(self, host_ip, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.host_address = (host_ip, port)
+        self.connection()
+    
+    def get_val(self, sens_id): 
+        self.sock.sendall(sens_id)
+        return int(self.sock.recv(1024))
+
+    def connection(self):
+        while True:
+            try:
+                self.sock.connect(self.host_address)
+                print("Connected to PLC Host!")
+                return
+            except:
+                print("Could not connect to host: ")
+                print(self.host_address)
     
     
 # Method: Usage
