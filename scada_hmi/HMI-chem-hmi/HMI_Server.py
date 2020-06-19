@@ -28,10 +28,10 @@
 
 # SEI SCADA System Simulation (4S) V1.0 HMI Server used on HMI machines
 
-from pymodbus3.server.sync import StartTcpServer
-from pymodbus3.device import ModbusDeviceIdentification
-from pymodbus3.datastore import ModbusSequentialDataBlock
-from pymodbus3.datastore import ModbusSlaveContext, ModbusServerContext
+from pymodbus.server.sync import StartTcpServer
+from pymodbus.device import ModbusDeviceIdentification
+from pymodbus.datastore import ModbusSequentialDataBlock
+from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
 from DB_Driver import DatabaseDriver
 import time
 import sys
@@ -41,13 +41,7 @@ import requests
 import json
 import os
 import socket
-# Websocket imports temp
-import websocket
-from websocket import create_connection
-try:
-  import thread
-except ImportError:
-    import _thread as thread
+
 
 uid=None
 
@@ -100,44 +94,9 @@ class Client():
 # Global reference to the hmi client object
 # This will allow both actuator and sensor methods to
 # Retrieve sensor values when neccesary
-hmi_client = Client('192.168.4.10', 5004)
+hmi_client = Client('192.168.0.17', 5004)
 
-# Websocket client
-class PLCWS:
-  call = None
-  response = None
-  
-  # Starts webbsocket client connection with resp and pub on node red
-  def __init__(self):
-    self.response = create_connection("ws://192.168.0.17:1880/ws/publishMessage")\
 
-    websocket.enableTrace(True)
-    call = websocket.WebSocketApp("ws://192.168.0.17:1880/ws/receiveMessage",
-                              on_message = on_message,
-                              on_error = on_error,
-                              on_close = on_close)
-    call.on_open = on_open
-    call.run_forever()
-
-  def on_message(self, message):
-    print(message)
-
-  def on_error(self, error):
-    print(error)
-
-  def on_close(self):
-    print("closed connection to websocket...")
-
-  def on_open(self):
-    def run(*args):
-      for i in range(3):
-        time.sleep(1)
-        self.call.send("Hello!")
-      time.sleep(1)
-      self.call.close()
-      print("thread terminating...")
-    thread.start_new_thread(run, ())
-ws_client = PLCWS()
 
 # Class: PLC Server Thread
 # Description: HMI Machines maintain connection between the PLC device and the Historian. The PLC Thread maintains three
@@ -443,10 +402,6 @@ class PLCThread(threading.Thread):
     def send_sens(ip, sens):
         payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
         #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
-<<<<<<< HEAD
-
-=======
->>>>>>> c9e0707bdf811f15b73ae16030aab9329ba792b1
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
 # Method: Update Sensor Number
