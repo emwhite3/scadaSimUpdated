@@ -41,13 +41,35 @@ import requests
 import json
 import os
 import socket
-
+import paho.mqtt.client as mqtt
 
 uid=None
+temp = []
+sub_list = ["give"]
 
-#Used for simulated data flow
-from random import seed
-from random import randint
+def on_message(client, userdata, message):
+    temp.append(str(message.payload.decode("utf-8")))
+    print("\n\n\n\n\n\n\n%s" % temp[-1])
+
+def wait_for(client,msgType,period=0.25):
+ if msgType=="SUBACK":
+  if client.on_subscribe:
+    while not client.suback_flag:
+      logging.info("waiting suback")
+      client.loop()  #check for messages
+      time.sleep(period)
+
+def client_subscribe(client, sub_list):
+    for topic in sub_list:
+        client.subscribe("sensor/%s"%topic)
+
+client = mqtt.Client("mqtt-client-hmi")
+client.on_message = on_message
+client.wait_for = wait_for
+client.connect("192.168.0.4")
+client_subscribe(client, sub_list)
+
+
 # Data Store for PLC Devices hr is used for Reg Read and Reg Write and is the only register interaction
 store = ModbusSlaveContext(
     di = ModbusSequentialDataBlock(0, [17]*100),
@@ -65,37 +87,6 @@ identity.VendorUrl   = 'http://www.wehaveyourback.com'
 identity.ProductName = 'PLC Sensor Server'
 identity.ModelName   = 'Sensor Server 5000'
 identity.MajorMinorRevision = '3.a1'
-
-# Class: Client Network Instance
-# Description: This is responsible for connecting the HMI to the PLC host so that
-# Communications is possibble. This will request sensor data as well as send actuator
-# commands the the PLC Host
-class Client():
-
-    def __init__(self, host_ip, port):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.host_address = (host_ip, port)
-        self.connection()
-    
-    def get_val(self, sens_id): 
-        self.sock.sendall(sens_id)
-        return int(self.sock.recv(1024))
-
-    def connection(self):
-        while True:
-            try:
-                self.sock.connect(self.host_address)
-                print("Connected to PLC Host!")
-                return
-            except:
-                print("Could not connect to host: ")
-                print(self.host_address)
-
-# Global reference to the hmi client object
-# This will allow both actuator and sensor methods to
-# Retrieve sensor values when neccesary
-hmi_client = Client('192.168.0.17', 5004)
-
 
 
 # Class: PLC Server Thread
@@ -278,16 +269,11 @@ class PLCThread(threading.Thread):
     # Arguments: self: initialized PLC Thread Object
     #            Device List: Dictionary List of al dependent devices to propagate the kill command
     #            Count: The counter used to identify the current command ID
-    # Returns: void
-    def kill_walk(self, device_list, count):
-        #send request to get all sensor values
-        #send kill request
-        for i in device_list:
-            if "sen" in i['id']:
-                store.setValues(3, i["device_num"], [int("0xffff", 0)])
-            if "act" in i['id']:
-                self.db_obj.set_actuator_value(i['id'], int("0xffff", 0), count)
-                store.setValues(3, i["device_num"], [int("0xffff", 0)])
+    # Returns: voidime.sleep(3)
+              #  store.setValues(3, i["device_num"], [int("0xffff", 0)])
+            #if "act" in i['id']:
+             #   self.db_obj.set_actuator_value(i['id'], int("0xffff", 0), count)
+              #  store.setValues(3, i["device_num"], [int("0xffff", 0)])
 
     # Method: Sensor Handler
     # Description: Handles sensor register values and updates the local database
@@ -301,7 +287,7 @@ class PLCThread(threading.Thread):
         sensor_list = self.db_obj.get_all_sensors_id()
         #print(sensor_list)
         while True:
-            time.sleep(3)
+            #time.sleep(3)
             for i in sensor_list:
                 #initiate client connection to pi
                 #request the sensor value by providing sensor id
@@ -309,7 +295,7 @@ class PLCThread(threading.Thread):
                 #set value equal to that of the pi
                 #make method call here
 
-                #value = hmi_client.get_val('yeeee')
+
                 value = store.getValues(3, i["device_num"])[0]
                 if len(hex(int(value))) == 6 and hex(int(value))[:3] == "0xf":
                     if hex(int(value)) == "0xffff":
@@ -330,11 +316,11 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         self.hmi_initial_setup()
-        historian_ip = "192.168.0.30:5000"
+        historian_ip = "192.168.0.17:5000"
         root = self.db_obj.get_device_list()
         for i in root:
             if "HISTORIAN" in i["id"]:
-                historian_ip = "192.168.0.30:5000" 
+                historian_ip = "192.168.0.17:5000" 
                 #% (i["host_ip"], i["host_port"])
                 break
         while True:
@@ -357,15 +343,16 @@ class PLCThread(threading.Thread):
     def historian_handler(self, ip):
         node_list = self.db_obj.get_all_plc_list()
         while True:
-            time.sleep(30)
+            #time.sleep(30)
             #print "WTF"
             for i in node_list:
-                print("IP %s A: %s" % (ip, i))
+                #print("IP %s A: %s" % (ip, i))
                 if i["plc_type"] == "actuator":
-                    print("IP %s A: %s" % (ip, i))
-                    print("IP %s A: %s" % (ip, i))
+                    #print("IP %s A: %s" % (ip, i))
+                    #print("IP %s A: %s" % (ip, i))
                     self.send_act(ip, i)
                 elif i["plc_type"] == "sensor":
+                    print("Sensor: IP %s A: %s" % (ip, i))
                     self.send_sens(ip, i)
 
     # Method: HMI Initial Setup
@@ -383,9 +370,9 @@ class PLCThread(threading.Thread):
     #            device_id: integer of the PLC device Device Number
     #            Actuator: Dictionary object that defines the current state of the actuator
     # Returns: void
-    @staticmethod
-    def send_act(ip, act):
-        payload = {'uid' : uid, 'newValue': update_sens_num(store.getValues(3, act["device_num"])[0])}
+    #@staticmethod
+    def send_act(self, ip, act):
+        payload = {'uid' : uid, 'newValue': update_sens_num(self, store.getValues(3, act["device_num"])[0])}
         #payload = {'uid' : uid, 'newValue': store.getValues(3, act["device_num"])[0]}
         try:
             requests.post("http://%s/api/actuators/%s" % (ip, act["id"]), data=payload)
@@ -398,9 +385,9 @@ class PLCThread(threading.Thread):
     #            device_id: integer of the PLC device Device Number
     #            Sensor: Dictionary object that defines the current state of the sensor
     # Returns: void
-    @staticmethod
-    def send_sens(ip, sens):
-        payload = {'uid': uid, 'newValue': update_sens_num(store.getValues(3, sens["device_num"])[0])}
+    #@staticmethod
+    def send_sens(self, ip, sens):
+        payload = {'uid': uid, 'newValue': update_sens_num(self, store.getValues(3, sens["device_num"])[0])}
         #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
@@ -408,45 +395,13 @@ class PLCThread(threading.Thread):
 # Description: Gets new sensor number by adding numbers from a text value to the base value
 # Arguments: base: current plc device number
 # Returns: int: new sensor number
-def update_sens_num(base):
-    large = open("simulatedtext/large.txt", "r+")
-    big = open("simulatedtext/big.txt", "r+")
-    plain = open("simulatedtext/plain.txt", "r+")
-    if base >= 1000:
-        numbers = large.readlines() 
-        return int(numbers[randint(0,len(numbers)-1)]) + base
-    elif base >= 400:  
-        numbers = big.readlines()
-        return int(numbers[randint(0,len(numbers)-1)]) + base
-    else:
-        numbers = plain.readlines()
-        return int(numbers[randint(0,len(numbers)-1)]) + base
-
-# Class: Client Network Instance
-# Description: This is responsible for connecting the HMI to the PLC host so that
-# Communications is possibble. This will request sensor data as well as send actuator
-# commands the the PLC Host
-class Client():
-
-    def __init__(self, host_ip, port):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.host_address = (host_ip, port)
-        self.connection()
-    
-    def get_val(self, sens_id): 
-        self.sock.sendall(sens_id)
-        return int(self.sock.recv(1024))
-
-    def connection(self):
-        while True:
-            try:
-                self.sock.connect(self.host_address)
-                print("Connected to PLC Host!")
-                return
-            except:
-                print("Could not connect to host: ")
-                print(self.host_address)
-    
+def update_sens_num(self, base):
+    client.loop_start()
+    print("publishing")
+    client.publish("sensor/get", "0,4,1,0,1")
+    time.sleep(0.1)
+    client.loop_stop()
+    return base+int(temp[-1])
     
 # Method: Usage
 # Description: displays CLI usage
@@ -476,9 +431,6 @@ if __name__ == "__main__":
     dbname = None
     dbusername = None
     dbpw = None
-    #set seed for random number gen
-    seed(12)
-
     # Process options
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hvi:p:d:u:w:",
