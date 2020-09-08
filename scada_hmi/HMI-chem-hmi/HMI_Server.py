@@ -47,6 +47,9 @@ uid=None
 temp = []
 sub_list = ["give"]
 
+# Methods: MQTT Client Handler
+    # Description: Responsible for adding mqtt client functioanlity to modbus
+    # server hosted on node red. 
 def on_message(client, userdata, message):
     temp.append(str(message.payload.decode("utf-8")))
     print("\n\n\n\n\n\n\n%s" % temp[-1])
@@ -66,7 +69,7 @@ def client_subscribe(client, sub_list):
 client = mqtt.Client("mqtt-client-hmi")
 client.on_message = on_message
 client.wait_for = wait_for
-client.connect("192.168.0.4")
+client.connect("192.168.0.17")
 client_subscribe(client, sub_list)
 
 
@@ -122,7 +125,6 @@ class PLCThread(threading.Thread):
             self.sensor_handler()
         elif self.system_type == 2:
             print("Actuator")
-            #self.actuator_handler()
         elif self.system_type == 3:
             print("Historian")
             self.db_obj.connect()
@@ -136,145 +138,6 @@ class PLCThread(threading.Thread):
     # Returns: Initialized PLC Thread object
     def plc_server(self): StartTcpServer(context, identity=identity, address=self.address)
 
-    # Method: Actuator Handler
-    # Description: Polls Data store for Actuator PLC Devices and updates changes within the Database and propagates
-    # changes to PLC devices.
-    # Arguments: self: initialized PLC Thread Object
-    #            DB Object: The DB Driver object to communicate with the postgres Database
-    # Returns: void
-    def actuator_handler(self):
-        time.sleep(10)
-        if not self.db_obj or not self.db_obj.connect():
-            print("Unable to connect to local database. Check database log-in credentials and connectivity.")
-            sys.exit()
-        act_list = self.db_obj.get_actuator_list()
-        counter = [0]*self.db_obj.get_plc_count()
-        while True:
-            for i in act_list:
-                reg_value = store.getValues(3, i["device_num"])[0]
-                current_value = self.db_obj.get_actuator_value(i["id"])
-                if reg_value != current_value["value"]:
-                    store.setValues(3, i["device_num"], [current_value["value"]])
-                    counter[i["device_num"] % self.db_obj.get_plc_count()] += 1
-                    c = counter[i["device_num"] % self.db_obj.get_plc_count()]
-                    for z in range(0, 10):
-                        if i["name"].lower() == "status" and current_value["value"] == int("0xffff", 0):
-                            self.kill_walk(self.db_obj.get_dependant_plc_devices(i['id']), c)
-                        elif i["name"].lower() == "status" and current_value["value"] == 0:
-                            self.off_walk(self.db_obj.get_dependant_plc_devices(i['id']), c)
-                        elif i["name"].lower() == "status" and current_value["value"] == 1:
-                            self.on_walk(self.db_obj.get_dependant_plc_devices(i['id']), c)
-                        elif i["type"] == 'variable':
-                            self.variable_walk(current_value["value"], self.db_obj.get_sensor_list(i['relationship_id'])[0], c)
-                        elif i["type"] == 'relational':
-                            print("Reg: %s Current: %s ID: %s Name: %s" % (reg_value, current_value["value"], i["id"], i["name"]))
-                            self.relational_walk(current_value["value"], self.db_obj.get_sensor_list(i['relationship_id'])[0],
-                                                 i['relationship_type'].lower(), c)
-
-                elif reg_value == current_value["value"] and not current_value['complete']:
-                    self.db_obj.validate_actuator_commands(i["id"])
-
-    # Method: Off Walk
-    # Description: Walks the Slave device list and and propagates off command. This will cause all
-    # dependent devices to sleep but not disconnect once the on command is propagated then the device
-    # will continue as normal.
-    # Arguments: self: initialized PLC Thread Object
-    #            Device List: List of all devices
-    #            Count: The counter used to identify the current command ID
-    # Returns: void
-    def off_walk(self, device_list, count):
-        for i in device_list:
-            if "sen" in i['id']:
-                store.setValues(3, i["device_num"], [int("0xf700", 0) + (count % 256)])
-            if "act" in i['id']:
-                self.db_obj.set_actuator_value(i['id'], 0, count)
-                store.setValues(3, i["device_num"], [0])
-
-
-
-    # Method: On Walk
-    # Description: Walks the Slave device list and and propagates on command.
-    # Arguments: self: initialized PLC Thread Object
-    #            Device List: List of all devices
-    #            Count: The counter used to identify the current command ID
-    # Returns: void
-    def on_walk(self, device_list, count):
-        for i in device_list:
-            if "sen" in i['id']:
-                store.setValues(3, i["device_num"], [int("0xf600", 0) + (count % 256)])
-            if "act" in i['id']:
-                if i['type'] == 'relational':
-                    self.db_obj.set_actuator_value(i['id'], 0, count)
-                    store.setValues(3, i["device_num"], [0])
-                elif i['type'] == 'variable':
-                    self.db_obj.set_actuator_value(i['id'], 2, count)
-                    store.setValues(3, i["device_num"], [2])
-                else:
-                    self.db_obj.set_actuator_value(i['id'], 1, count)
-                    store.setValues(3, i["device_num"], [1])
-
-    # Method: Relational Walk
-    # Description: Communicates to relational sensor devices the state of the actuator so that the sensor
-    # will react according to the actuator state
-    # Arguments: Device: Dictionary object of sensor device to be manipulated
-    #            Current: Integer Current Actuator state
-    #            Type: String of relationship type (Positive or Negative)
-    #            Count: The counter used to identify the current command ID
-    # Returns: void
-    @staticmethod
-    def relational_walk(current, device, type, count):
-        if type == "negative":
-            if current == 0:
-                store.setValues(3, device['device_num'], [int("0xf600", 0) + (count % 256)])
-            elif current == 1:
-                store.setValues(3, device['device_num'], [int("0xfb00", 0) + (count % 256)])
-            elif current == 2:
-                store.setValues(3, device['device_num'], [int("0xfc00", 0) + (count % 256)])
-            elif current == 3:
-                store.setValues(3, device['device_num'], [int("0xfd00", 0) + (count % 256)])
-        elif type == "positive":
-            if current == 0:
-                store.setValues(3, device['device_num'], [int("0xf600", 0) + (count % 256)])
-            elif current == 1:
-                store.setValues(3, device['device_num'], [int("0xf800", 0) + (count % 256)])
-            elif current == 2:
-                store.setValues(3, device['device_num'], [int("0xf900", 0) + (count % 256)])
-            elif current == 3:
-                store.setValues(3, device['device_num'], [int("0xfa00", 0) + (count % 256)])
-
-    # Method: Relational Walk
-    # Description: Communicates to variable sensor devices the state of the actuator so that the sensor
-    # will react according to the actuator state
-    # Arguments: Device: Dictionary object of sensor device to be manipulated
-    #            Register Value: Integer Current Actuator state
-    #            Count: The counter used to identify the current command ID
-    # Returns: void
-    @staticmethod
-    def variable_walk(reg_value, device, count):
-        if reg_value == 0:
-            store.setValues(3, device["device_num"], [int("0xf700", 0) + (count % 256)])
-        elif reg_value == 1:
-            store.setValues(3, device["device_num"], [int("0xf400", 0) + (count % 256)])
-        elif reg_value == 2:
-            store.setValues(3, device["device_num"], [int("0xf600", 0) + (count % 256)])
-        elif reg_value == 3:
-            store.setValues(3, device["device_num"], [int("0xf500", 0) + (count % 256)])
-
-
-
-    #CAN SHUTDOWN PI: use terminal command
-
-    # Method: Kill Walk
-    # Description: Communicates to dependent devices the kill command to disconnect and shut down the device
-    # Arguments: self: initialized PLC Thread Object
-    #            Device List: Dictionary List of al dependent devices to propagate the kill command
-    #            Count: The counter used to identify the current command ID
-    # Returns: voidime.sleep(3)
-              #  store.setValues(3, i["device_num"], [int("0xffff", 0)])
-            #if "act" in i['id']:
-             #   self.db_obj.set_actuator_value(i['id'], int("0xffff", 0), count)
-              #  store.setValues(3, i["device_num"], [int("0xffff", 0)])
-
     # Method: Sensor Handler
     # Description: Handles sensor register values and updates the local database
     # Arguments: self: initialized PLC Thread Object
@@ -285,17 +148,8 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         sensor_list = self.db_obj.get_all_sensors_id()
-        #print(sensor_list)
         while True:
-            #time.sleep(3)
             for i in sensor_list:
-                #initiate client connection to pi
-                #request the sensor value by providing sensor id
-                #recieve sensor value back from the pi
-                #set value equal to that of the pi
-                #make method call here
-
-
                 value = store.getValues(3, i["device_num"])[0]
                 if len(hex(int(value))) == 6 and hex(int(value))[:3] == "0xf":
                     if hex(int(value)) == "0xffff":
@@ -309,8 +163,6 @@ class PLCThread(threading.Thread):
     # occurs this thread will continue with the historian handler
     # Arguments: self: initialized PLC Thread Object
     # Returns: void
-
-    #Need to scrape from the json file for the historian ip address
     def historian_connection_check(self):
         if not self.db_obj or not self.db_obj.connect():
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
@@ -325,7 +177,6 @@ class PLCThread(threading.Thread):
                 break
         while True:
             try:
-                #print requests.get("http://%s/api" % historian_ip).status_code
                 if requests.get("http://%s/api" % historian_ip).status_code == 200:
                     print("Connected to Historian!")
                     self.historian_handler(historian_ip)
@@ -343,13 +194,8 @@ class PLCThread(threading.Thread):
     def historian_handler(self, ip):
         node_list = self.db_obj.get_all_plc_list()
         while True:
-            #time.sleep(30)
-            #print "WTF"
             for i in node_list:
-                #print("IP %s A: %s" % (ip, i))
                 if i["plc_type"] == "actuator":
-                    #print("IP %s A: %s" % (ip, i))
-                    #print("IP %s A: %s" % (ip, i))
                     self.send_act(ip, i)
                 elif i["plc_type"] == "sensor":
                     print("Sensor: IP %s A: %s" % (ip, i))
@@ -388,7 +234,6 @@ class PLCThread(threading.Thread):
     #@staticmethod
     def send_sens(self, ip, sens):
         payload = {'uid': uid, 'newValue': update_sens_num(self, store.getValues(3, sens["device_num"])[0])}
-        #payload = {'uid': uid, 'newValue': store.getValues(3, sens["device_num"])[0]}
         requests.post("http://%s/api/sensors/%s" % (ip, sens["id"]), data=payload)
 
 # Method: Update Sensor Number
@@ -468,7 +313,6 @@ if __name__ == "__main__":
         print("Database has yet to be initiated")
         time.sleep(10)
     uid = test.get_root_id()
-    #print type(uid)
     test.disconnect()
     
 
