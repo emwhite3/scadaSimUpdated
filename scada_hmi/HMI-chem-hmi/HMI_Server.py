@@ -69,7 +69,7 @@ def client_subscribe(client, sub_list):
 client = mqtt.Client("mqtt-client-hmi")
 client.on_message = on_message
 client.wait_for = wait_for
-client.connect("192.168.0.17")
+client.connect("192.168.0.17")                  #has to be same as ip of rpi hosting node red
 client_subscribe(client, sub_list)
 
 
@@ -168,11 +168,11 @@ class PLCThread(threading.Thread):
             print("Unable to connect to local database. Check database log-in credentials and connectivity.")
             sys.exit()
         self.hmi_initial_setup()
-        historian_ip = "192.168.0.17:5000"
+        historian_ip = "192.168.0.17:5000"              #has to be same ip as historian
         root = self.db_obj.get_device_list()
         for i in root:
             if "HISTORIAN" in i["id"]:
-                historian_ip = "192.168.0.17:5000" 
+                historian_ip = "192.168.0.17:5000"      #has to be same ip as historian
                 #% (i["host_ip"], i["host_port"])
                 break
         while True:
